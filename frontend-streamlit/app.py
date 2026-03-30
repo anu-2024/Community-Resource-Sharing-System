@@ -1,51 +1,141 @@
-
 import streamlit as st
-import requests
+import sqlite3
 import pandas as pd
 
-API="http://localhost:8080/api/items"
+st.set_page_config(page_title="Community Resource Sharing", layout="wide")
 
-st.set_page_config(page_title="Community Resource Sharing",layout="wide")
+conn = sqlite3.connect("community.db", check_same_thread=False)
+c = conn.cursor()
 
-st.title("Community Resource Sharing System")
+c.execute("""
+CREATE TABLE IF NOT EXISTS items(
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+name TEXT,
+category TEXT,
+description TEXT,
+condition TEXT,
+location TEXT,
+donor TEXT,
+contact TEXT,
+status TEXT
+)
+""")
 
-menu=st.sidebar.selectbox("Menu",
-["Home","Add Item","View Items"])
+conn.commit()
 
-if menu=="Home":
-    st.header("Welcome")
-    st.write("Donate or request useful household items to reduce waste.")
+st.title("🌍 Community Resource Sharing System")
 
-if menu=="Add Item":
-    st.header("Add Donation Item")
+menu = st.sidebar.selectbox(
+"Navigation",
+["Home","Add Donation","Browse Items"]
+)
 
-    name=st.text_input("Item Name")
-    category=st.selectbox("Category",["Books","Clothes","Furniture","Electronics","Other"])
-    description=st.text_area("Description")
-    condition=st.selectbox("Condition",["New","Good","Used"])
-    location=st.text_input("Location")
-    donor=st.text_input("Donor Name")
-    contact=st.text_input("Contact")
+# HOME PAGE
+if menu == "Home":
 
-    if st.button("Submit"):
-        data={
-        "name":name,
-        "category":category,
-        "description":description,
-        "condition":condition,
-        "location":location,
-        "donorName":donor,
-        "contact":contact
-        }
-        r=requests.post(API,json=data)
-        st.success("Item Added!")
+    st.subheader("Reducing Waste. Helping Communities.")
 
-if menu=="View Items":
-    st.header("Available Items")
+    df = pd.read_sql("SELECT * FROM items", conn)
 
-    r=requests.get(API)
-    data=r.json()
+    total = len(df)
+    available = len(df[df["status"]=="Available"]) if total>0 else 0
 
-    if data:
-        df=pd.DataFrame(data)
-        st.dataframe(df)
+    col1,col2 = st.columns(2)
+
+    col1.metric("Total Items Donated", total)
+    col2.metric("Available Items", available)
+
+    st.write(
+    "Donate unused household items so others in the community can benefit."
+    )
+
+# ADD ITEM
+elif menu == "Add Donation":
+
+    st.subheader("Add Item for Donation")
+
+    name = st.text_input("Item Name")
+    category = st.selectbox(
+    "Category",
+    ["Books","Clothes","Furniture","Electronics","Other"]
+    )
+
+    description = st.text_area("Description")
+
+    condition = st.selectbox(
+    "Condition",
+    ["New","Good","Used"]
+    )
+
+    location = st.text_input("Location")
+
+    donor = st.text_input("Donor Name")
+
+    contact = st.text_input("Contact Number")
+
+    if st.button("Donate Item"):
+
+        c.execute("""
+        INSERT INTO items
+        (name,category,description,condition,location,donor,contact,status)
+        VALUES(?,?,?,?,?,?,?,?)
+        """,
+        (name,category,description,condition,location,donor,contact,"Available")
+        )
+
+        conn.commit()
+
+        st.success("Item added successfully!")
+
+# VIEW ITEMS
+elif menu == "Browse Items":
+
+    st.subheader("Available Items")
+
+    category_filter = st.selectbox(
+    "Filter by Category",
+    ["All","Books","Clothes","Furniture","Electronics","Other"]
+    )
+
+    if category_filter == "All":
+        df = pd.read_sql("SELECT * FROM items", conn)
+    else:
+        df = pd.read_sql(
+        f"SELECT * FROM items WHERE category='{category_filter}'", conn)
+
+    if df.empty:
+        st.info("No items available.")
+    else:
+
+        for i,row in df.iterrows():
+
+            with st.container():
+
+                col1,col2 = st.columns([3,1])
+
+                col1.markdown(f"""
+                ### {row['name']}
+                **Category:** {row['category']}  
+                **Condition:** {row['condition']}  
+                **Location:** {row['location']}  
+                **Description:** {row['description']}  
+                **Contact:** {row['contact']}
+                """)
+
+                if row["status"] == "Available":
+
+                    if col2.button("Request", key=row["id"]):
+
+                        c.execute(
+                        "UPDATE items SET status='Requested' WHERE id=?",
+                        (row["id"],)
+                        )
+
+                        conn.commit()
+
+                        st.success("Request sent!")
+
+                else:
+                    col2.write("Requested")
+
+                st.divider()
