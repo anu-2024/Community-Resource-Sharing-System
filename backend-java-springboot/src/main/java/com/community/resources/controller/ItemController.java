@@ -32,8 +32,19 @@ public class ItemController {
         return service.getByCategory(cat);
     }
 
-    @PutMapping("/{id}/status")
-    public Item updateStatus(@PathVariable Long id,@RequestParam String status){
-        return service.updateStatus(id,status);
+   @PutMapping("/{id}/status")
+public Item updateStatus(
+        @PathVariable Long id,
+        @RequestParam String status,
+        @RequestParam String ownerName){
+
+    Item item = service.getItemById(id);
+
+    // Only owner can update item status
+    if(!item.getOwnerName().equals(ownerName)){
+        throw new RuntimeException("Only the owner can update item status");
     }
+
+    return service.updateStatus(id,status);
+}
 }
