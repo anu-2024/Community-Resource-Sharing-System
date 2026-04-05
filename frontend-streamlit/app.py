@@ -4,9 +4,11 @@ import pandas as pd
 
 st.set_page_config(page_title="Community Resource Sharing", layout="wide")
 
+# DATABASE CONNECTION
 conn = sqlite3.connect("community.db", check_same_thread=False)
 c = conn.cursor()
 
+# CREATE TABLE
 c.execute("""
 CREATE TABLE IF NOT EXISTS items(
 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -17,11 +19,15 @@ condition TEXT,
 location TEXT,
 donor TEXT,
 contact TEXT,
-status TEXT
+status TEXT,
+requested_by TEXT
 )
 """)
 
 conn.commit()
+
+# USER IDENTIFICATION
+user_name = st.sidebar.text_input("Enter Your Name")
 
 st.title("🌍 Community Resource Sharing System")
 
@@ -39,11 +45,13 @@ if menu == "Home":
 
     total = len(df)
     available = len(df[df["status"]=="Available"]) if total>0 else 0
+    requested = len(df[df["status"]=="Requested"]) if total>0 else 0
 
-    col1,col2 = st.columns(2)
+    col1,col2,col3 = st.columns(3)
 
     col1.metric("Total Items Donated", total)
     col2.metric("Available Items", available)
+    col3.metric("Requested Items", requested)
 
     st.write(
     "Donate unused household items so others in the community can benefit."
@@ -55,6 +63,7 @@ elif menu == "Add Donation":
     st.subheader("Add Item for Donation")
 
     name = st.text_input("Item Name")
+
     category = st.selectbox(
     "Category",
     ["Books","Clothes","Furniture","Electronics","Other"]
@@ -77,10 +86,10 @@ elif menu == "Add Donation":
 
         c.execute("""
         INSERT INTO items
-        (name,category,description,condition,location,donor,contact,status)
-        VALUES(?,?,?,?,?,?,?,?)
+        (name,category,description,condition,location,donor,contact,status,requested_by)
+        VALUES(?,?,?,?,?,?,?,?,?)
         """,
-        (name,category,description,condition,location,donor,contact,"Available")
+        (name,category,description,condition,location,donor,contact,"Available","")
         )
 
         conn.commit()
@@ -119,23 +128,68 @@ elif menu == "Browse Items":
                 **Condition:** {row['condition']}  
                 **Location:** {row['location']}  
                 **Description:** {row['description']}  
-                **Contact:** {row['contact']}
+                **Contact:** {row['contact']}  
+                **Donor:** {row['donor']}
                 """)
 
+                # STATUS BADGES
+                if row["status"] == "Available":
+                    col1.success("Available")
+
+                elif row["status"] == "Requested":
+                    col1.warning(f"Requested by {row['requested_by']}")
+
+                elif row["status"] == "Sold Out":
+                    col1.error("Sold Out")
+
+                elif row["status"] == "Not Available":
+                    col1.error("Not Available")
+
+                # REQUEST BUTTON
                 if row["status"] == "Available":
 
-                    if col2.button("Request", key=row["id"]):
+                    if user_name == row["donor"]:
+                        col2.write("You are owner")
+
+                    else:
+
+                        if col2.button("Request", key=row["id"]):
+
+                            c.execute(
+                            "UPDATE items SET status='Requested', requested_by=? WHERE id=?",
+                            (user_name,row["id"])
+                            )
+
+                            conn.commit()
+
+                            st.success("Request sent!")
+
+                else:
+                    col2.write("")
+
+                # OWNER CONTROLS
+                if row["donor"] == user_name:
+
+                    if col2.button("Mark Sold Out", key=f"sold{row['id']}"):
 
                         c.execute(
-                        "UPDATE items SET status='Requested' WHERE id=?",
+                        "UPDATE items SET status='Sold Out' WHERE id=?",
                         (row["id"],)
                         )
 
                         conn.commit()
 
-                        st.success("Request sent!")
+                        st.success("Item marked as Sold Out")
 
-                else:
-                    col2.write("Requested")
+                    if col2.button("Mark Not Available", key=f"na{row['id']}"):
+
+                        c.execute(
+                        "UPDATE items SET status='Not Available' WHERE id=?",
+                        (row["id"],)
+                        )
+
+                        conn.commit()
+
+                        st.success("Item marked as Not Available")
 
                 st.divider()
