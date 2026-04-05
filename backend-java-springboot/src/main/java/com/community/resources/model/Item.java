@@ -18,7 +18,10 @@ public class Item {
     private String donorName;
     private String contact;
     private String status;
+   
 
+    private String status; 
+    // AVAILABLE, REQUESTED, SOLD_OUT, NOT_AVAILABLE
     public Long getId(){ return id; }
     public void setId(Long id){ this.id=id; }
 
