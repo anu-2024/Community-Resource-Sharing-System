@@ -33,4 +33,7 @@ public class ItemService {
         item.setStatus(status);
         return repo.save(item);
     }
+    public Item getItemById(Long id){
+    return repository.findById(id).orElseThrow();
+}
 }
